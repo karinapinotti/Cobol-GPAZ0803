@@ -1,0 +1,215 @@
+      *--------------------------------------------------------------*
+      *                                                              *
+      * OBJETIVO: CALCULAR A SIMULACAO DE EMPRESTIMOS FORNECIDOS     *
+      *                  VIA SIMUEMP E GRAVAR EMPAPROV               *
+      *                                                              *
+      *--------------------------------------------------------------*
+
+      *--------------------------------------------------------------*
+       IDENTIFICATION                      DIVISION.
+      *--------------------------------------------------------------*
+       PROGRAM-ID.                         GPAZ0803.
+       AUTHOR.                             KARINA.
+       DATE-WRITTEN.                       14/09/2020.
+       DATE-COMPILED.                      14/09/2020.
+       SECURITY.                           NENHUMA.
+      *--------------------------------------------------------------*
+       ENVIRONMENT                         DIVISION.
+      *--------------------------------------------------------------*
+       CONFIGURATION                       SECTION.
+       SOURCE-COMPUTER.                    NOTEKARINA.
+       OBJECT-COMPUTER.                    HERCULES01.
+       SPECIAL-NAMES.
+           DECIMAL-POINT IS COMMA.
+      *
+       INPUT-OUTPUT                        SECTION.
+      * ETAPA 1: ESPECIFICACAO DOS ARQUIVOS DE ENTRADA E SAIDA
+       FILE-CONTROL.
+           SELECT SIMUEMP ASSIGN           TO UT-S-SIMUEMP
+           ORGANIZATION IS SEQUENTIAL
+           ACCESS MODE IS SEQUENTIAL
+           FILE STATUS IS FS-SIMUEMP
+           .
+           SELECT EMPAPROV ASSIGN          TO UT-S-EMPAPROV
+           ORGANIZATION IS SEQUENTIAL
+           ACCESS MODE IS SEQUENTIAL
+           FILE STATUS IS FS-EMPAPROV
+           .
+      *--------------------------------------------------------------*
+       DATA                                DIVISION.
+      *--------------------------------------------------------------*
+       FILE                                SECTION.
+      * ETAPA 2: DETALHAMENTO DOS ARQUIVOS DE ENTRADA E SAIDA
+       FD  SIMUEMP
+           LABEL RECORD STANDARD
+           BLOCK CONTAINS 0 RECORDS
+           RECORDING MODE IS F
+           RECORD CONTAINS 18 CHARACTERS
+           DATA RECORD IS REG-SIMUEMP
+           .
+       01  REG-SIMUEMP.
+           05 NUM-SIMULACAO-S              PIC 9(04).
+           05 VAL-EMPRESTIMO-S             PIC 9(06)V99.
+           05 TX-JUROS-S                   PIC 9(02)V99.
+           05 QTD-PARCELAS-S               PIC 9(02).
+       FD  EMPAPROV
+           LABEL RECORD STANDARD
+           BLOCK CONTAINS 0 RECORDS
+           RECORDING MODE IS F
+           RECORD CONTAINS 35 CHARACTERS
+           DATA RECORD IS REG-EMPAPROV
+           .
+       01  REG-EMPAPROV.
+           05 NUM-SIMULACAO-E              PIC 9(04).
+           05 VAL-EMPRESTIMO-E             PIC 9(06)V99.
+           05 TX-JUROS-E                   PIC 9(02)V99.
+           05 QTD-PARCELAS-E               PIC 9(02).
+           05 VALOR-PARCELAS-E             PIC 9(06)V99.
+           05 TOTAL-EMP-E                  PIC 9(07)V99.
+      *
+       WORKING-STORAGE                     SECTION.
+      *
+           COPY VARTEMPO.
+           COPY VARDATA.
+      *--------------------------------------------------------------*
+      * DECLARANDO AS VARIAVEIS ESPELHO DOS ARQUIVOS DE ENTRADA E SAIDA
+       01  WS-REG-SIMUEMP.
+           05 WS-NUM-SIMULACAO-S           PIC 9999.
+           05 WS-VAL-EMPRESTIMO-S          PIC 9(06)V99.
+           05 WS-JUROS-S                   PIC 9(02)V99.
+           05 WS-QTD-PARCELAS-S            PIC 99.
+       01  WS-REG-EMPAPROV.
+           05 WS-NUM-SIMULACAO-E           PIC 9(04).
+           05 WS-VAL-EMPRESTIMO-E          PIC 9(06)V99.
+           05 WS-TX-JUROS-E                PIC 9(02)V99.
+           05 WS-QTD-PARCELAS-E            PIC 9(02).
+           05 WS-VALOR-PARCELAS-E          PIC 9(06)V99.
+           05 WS-TOTAL-EMP-E               PIC 9(07)V99.
+       77  WS-VAL-PARC-AUX                 PIC 9(07)V99.
+       77  WS-VAL-TOTAL-AUX                PIC 9(08)V99.
+       77  WS-CTLIDO                       PIC 9(04) COMP.
+       77  WS-CTAPROV                      PIC 9(04) COMP.
+       77  WS-CTREPROV                     PIC 9(04) COMP.
+      *DECLARANDO AS VARIAVEIS FORMATADAS
+       77  WS-CTLIDO-F                     PIC ZZZ9.
+       77  WS-CTAPROV-F                    PIC ZZZ9.
+       77  WS-CTREPROV-F                   PIC ZZZ9.
+      *
+      * DECLARANDO AS VARIAVEIS DE FILE STATUS
+       77  FS-SIMUEMP                      PIC X(02).
+       77  FS-EMPAPROV                     PIC X(02).
+       77  WS-FS                           PIC X(02).
+       77  WS-MSG                          PIC X(60).
+      *
+       LINKAGE                             SECTION.
+      * ESSA SECTION FICARA VAZIA POIS NAO RECEBE DADOS DE OUTROS PROG
+      *--------------------------------------------------------------*
+       PROCEDURE                           DIVISION.
+      *--------------------------------------------------------------*
+      * ETAPA 3:MANIPULACAO DOS ARQUIVOS DE ENTRADA E SAIDA
+       0000-GPAZ0801.
+           PERFORM 1000-INICIALIZAR
+           PERFORM 2000-PROCESSAR
+                   UNTIL FS-SIMUEMP = "10"
+           PERFORM 3000-TERMINO
+           STOP RUN
+           .
+      *--------------------------------------------------------------*
+       1000-INICIALIZAR.
+           ACCEPT WS-HORARIO-INICIAL FROM TIME
+           MOVE 0                          TO WS-CTLIDO
+                                              WS-CTAPROV-F
+                                              WS-CTREPROV-F
+           OPEN INPUT SIMUEMP
+              IF FS-SIMUEMP NOT = "00"
+                 MOVE "ERRO ABERTURA SIMUEMP" TO WS-MSG
+                 MOVE FS-SIMUEMP           TO WS-FS
+                 GO                        TO 9999-ERRO
+              END-IF
+           OPEN OUTPUT EMPAPROV
+              IF FS-EMPAPROV NOT = "00"
+                 MOVE "ERRO ABERTURA EMPAPROV"  TO WS-MSG
+                 MOVE FS-EMPAPROV               TO WS-FS
+                 GO                             TO 9999-ERRO
+              END-IF
+           PERFORM 1500-LER-SIMUEMP
+           .
+      *--------------------------------------------------------------*
+       1500-LER-SIMUEMP.
+           READ SIMUEMP INTO WS-REG-SIMUEMP
+           IF FS-SIMUEMP = "00"
+              ADD 1                             TO WS-CTLIDO
+              ELSE
+              IF FS-SIMUEMP NOT = "10"
+                 MOVE "ERRO LEITURA SIMUEMP"    TO WS-MSG
+                 MOVE FS-SIMUEMP                TO WS-FS
+                 GO                             TO 9999-ERRO
+              END-IF
+           END-IF
+           .
+      *--------------------------------------------------------------*
+       2000-PROCESSAR.
+           IF WS-VAL-EMPRESTIMO-S >= 100000 AND
+              WS-QTD-PARCELAS-S >= 50
+                 ADD 1                          TO WS-CTREPROV
+           ELSE
+           COMPUTE WS-VAL-PARC-AUX = (WS-VAL-EMPRESTIMO-S * WS-JUROS-S
+                                     / 100) / (1 - 1 /
+                                     (1 + WS-JUROS-S / 100)
+                                     ** WS-QTD-PARCELAS-S)
+           COMPUTE WS-VAL-TOTAL-AUX = WS-VAL-PARC-AUX *
+                                      WS-QTD-PARCELAS-S
+           MOVE WS-NUM-SIMULACAO-S         TO WS-NUM-SIMULACAO-E
+           MOVE WS-VAL-EMPRESTIMO-S        TO WS-VAL-EMPRESTIMO-E
+           MOVE WS-JUROS-S                 TO WS-TX-JUROS-E
+           MOVE WS-QTD-PARCELAS-S          TO WS-QTD-PARCELAS-E
+           MOVE WS-VAL-PARC-AUX            TO WS-VALOR-PARCELAS-E
+           MOVE WS-VAL-TOTAL-AUX           TO WS-TOTAL-EMP-E
+           WRITE REG-EMPAPROV FROM WS-REG-EMPAPROV
+           IF FS-EMPAPROV = "00"
+              ADD 1                        TO WS-CTAPROV
+           ELSE
+              MOVE "ERRO GRAVACAO EMPAPROV"
+                                           TO WS-MSG
+              MOVE FS-EMPAPROV             TO WS-FS
+              GO                           TO 9999-ERRO
+           END-IF
+           END-IF
+           PERFORM 1500-LER-SIMUEMP
+           .
+      *
+       3000-TERMINO.
+           CLOSE SIMUEMP
+           IF FS-SIMUEMP NOT = "00"
+              MOVE "ERRO FECHAMENTO SIMUEMP"
+                                           TO WS-MSG
+              MOVE FS-SIMUEMP              TO WS-FS
+              GO                           TO 9999-ERRO
+           END-IF
+           CLOSE EMPAPROV
+           IF FS-EMPAPROV NOT = "00"
+              MOVE "ERRO FECHAMENTO EMPAPROV"
+                                           TO WS-MSG
+              MOVE FS-EMPAPROV             TO WS-FS
+              GO                           TO 9999-ERRO
+           END-IF
+           ACCEPT WS-HORARIO-FINAL FROM TIME
+           COPY CALCTEMP.
+           MOVE WS-CTLIDO                  TO WS-CTLIDO-F
+           MOVE WS-CTAPROV                 TO WS-CTAPROV-F
+           MOVE WS-CTREPROV                TO WS-CTREPROV-F
+      *---------------------------------------------------------------*
+           DISPLAY "**************************************************"
+           DISPLAY "TOTAL DE SIMULACOES LIDAS........: " WS-CTLIDO-F
+           DISPLAY "TOTAL DE SIMULACOES APROVADAS....: " WS-CTAPROV-F
+           DISPLAY "TOTAL DE SIMULACOES REPROVADAS...: " WS-CTREPROV-F
+           DISPLAY "TEMPO TOTAL DE PROCESSAMENTO.....: "
+                                            WS-TEMPO-PROCESSAMENTO-F
+           DISPLAY "=================================================="
+           DISPLAY "==  TERMINO NORMAL DE PROCESSAMENTO DO GPXXN03  =="
+           DISPLAY "=================================================="
+           PERFORM 9000-IMPRIME-DATA
+           .
+      *---------------------------------------------------------------*
+           COPY ROTDATA.
+           COPY ROTERRO.
